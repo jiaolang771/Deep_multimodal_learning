@@ -6,4 +6,4 @@
 # clarify the unsupervised learning using SSAE
 # add predicted labels 
 
-# code will be updated once the manuscript is accepted to include bakcground information
+code will be updated once the manuscript is accepted to include bakcground information
