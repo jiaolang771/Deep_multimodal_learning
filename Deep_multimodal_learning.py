@@ -19,7 +19,7 @@ from DL_models import DeepMultimodal
 
 
 
-##  create random samples
+##  create synthetic samples as Cohort II
 FC_features = np.random.rand(72,90,90,3)
 SC_features = np.random.rand(72,90,90,3)
 DWMA_features = np.random.rand(72,10)
@@ -37,13 +37,16 @@ DWMA_train = DWMA_features[train_idx,:]
 Clinical_train = Clinical_features[train_idx,:]
 labels_train = to_categorical(labels[train_idx])
 
+##  Balance and Augument data
+##  apply Data_bal_augmentation function for imbalanced dataset
+##  The provided function is able to balance the dataset between positie and negative group
+##  augment the dataset x10
 
 FC_test = FC_features[test_idx,:,:,:]
 SC_test = SC_features[test_idx,:,:,:]
 DWMA_test = DWMA_features[test_idx,:]
 Clinical_test = Clinical_features[test_idx,:]
 labels_test = to_categorical(labels[test_idx])
-
 
 
 
@@ -84,6 +87,26 @@ clin_len = Clinical_train.shape[1]
 model = DeepMultimodal.build(FC_size, chanel_size, SC_size, dwma_len, clin_len) 
 #                        16, third_kern_size, 32, four_kern_size)
 
+##  It is more efficient to off-line pretain SSAE using 'unsupevised_pretraining.py' function to obtain SSAE weights
+##  load pretrained SSAE weights and assign to deep multimodal learning model
+##  here we use ssae_layer1 and 2 as an example. 
+##  Note:  FC and SC must be trained separately
+ssae_l1 = np.load('ssae_layer1.npy')
+ssae_l2 = np.load('ssae_layer2.npy')
+
+W_int = model.get_weights()
+
+#   transfer SSAE weights. FC layer index [0,24]  SC layer index [2,26]
+W_tl = W_int[:]
+W_tl[0] = ssae_l1
+W_tl[24] = ssae_l2
+        
+W_tl[2] = ssae_l1
+W_tl[26] = ssae_l2
+        
+model.set_weights(W_tl)    
+
+
 # Compile the model
 lr = 0.01
 epoch_max = 10
@@ -91,7 +114,7 @@ my_optimizer = Adam(lr=lr, decay=lr/epoch_max)
 model.compile(optimizer=my_optimizer,loss='categorical_crossentropy',metrics=['accuracy'])         
 
 
-# Fit the model/ generator
+# Fit the model in a supervised learning
 model_training = model.fit([FC_train, SC_train, DWMA_train, Clinical_train],
                             labels_train, 
                            epochs=epoch_max,
@@ -100,7 +123,14 @@ model_training = model.fit([FC_train, SC_train, DWMA_train, Clinical_train],
                            batch_size=8)
 
 
-#  predict    
+
+#  predicted and true labels
+predictions = model.predict([FC_test, SC_test, DWMA_test, Clinical_test])
+pred_y = np.argmax(predictions, axis=1)
+true_y = np.argmax(labels_test, axis=1)
+
+
+#  evaluate Acc   
 score = model.evaluate([FC_test, SC_test, DWMA_test, Clinical_test],labels_test)
 print('Test accuracy is {}'.format(score[1]))     
 
